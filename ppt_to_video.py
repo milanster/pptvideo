@@ -4,9 +4,8 @@ from pptx import Presentation
 from gtts import gTTS
 from moviepy.editor import *
 import comtypes.client
+import comtypes
 
-
-output_dir = "output"
 def cleanup_temp_dirs():
     """Clean up temporary directories with error handling"""
     for directory in ["temp_images", "temp_audio"]:
@@ -24,8 +23,9 @@ def cleanup_temp_dirs():
             except Exception as e:
                 print(f"Warning: Could not remove directory {directory}: {e}")
 
-def convert_ppt_to_video(ppt_path, output_video="output.mp4"):
+def convert_ppt_to_video(ppt_path, output_dir="output", output_video="output.mp4", language='en', accent='com'):
     try:
+        clips = []
         # Create temp directories
         if not os.path.exists("temp_images"):
             os.mkdir("temp_images")
@@ -34,6 +34,10 @@ def convert_ppt_to_video(ppt_path, output_video="output.mp4"):
         if not os.path.exists(output_dir):
             os.mkdir(output_dir)
 
+        print("File path: ", ppt_path)
+
+        # Initialize COM library
+        comtypes.CoInitialize()
         # Convert PPT slides to images using COM interface (Windows only)
         powerpoint = comtypes.client.CreateObject("Powerpoint.Application")
         powerpoint.Visible = 1
@@ -46,7 +50,6 @@ def convert_ppt_to_video(ppt_path, output_video="output.mp4"):
 
         # Load presentation to get slide notes
         prs = Presentation(ppt_path)
-        clips = []
 
         for idx, slide in enumerate(prs.slides):
             # Get slide notes
@@ -56,7 +59,7 @@ def convert_ppt_to_video(ppt_path, output_video="output.mp4"):
             # Convert notes to speech
             if notes.strip():
                 audio_path = f"temp_audio/audio_{idx+1}.mp3"
-                tts = gTTS(text=notes, lang='en')
+                tts = gTTS(text=notes, lang=language, tld=accent)
                 tts.save(audio_path)
                 audio_clip = AudioFileClip(audio_path)
                 duration = audio_clip.duration

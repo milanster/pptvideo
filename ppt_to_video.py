@@ -5,6 +5,13 @@ from gtts import gTTS
 from moviepy.editor import *
 import comtypes.client
 import comtypes
+from dotenv import load_dotenv
+from openai import OpenAI
+
+use_open_ai = False
+
+if use_open_ai:
+    client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 def cleanup_temp_dirs():
     """Clean up temporary directories with error handling"""
@@ -59,8 +66,21 @@ def convert_ppt_to_video(ppt_path, output_dir="output", output_video="output.mp4
             # Convert notes to speech
             if notes.strip():
                 audio_path = f"temp_audio/audio_{idx+1}.mp3"
-                tts = gTTS(text=notes, lang=language, tld=accent)
-                tts.save(audio_path)
+
+                if use_open_ai:
+                    # Generate speech using OpenAI
+                    response = client.audio.speech.create(
+                        model="tts-1",  # or "tts-1-hd" for higher quality
+                        voice="alloy",  # options: alloy, echo, fable, onyx, nova, shimmer
+                        input=notes
+                    )
+                    
+                    # Save the audio file
+                    response.stream_to_file(audio_path)
+                else:
+                    tts = gTTS(text=notes, lang=language, tld=accent)
+                    tts.save(audio_path)
+
                 audio_clip = AudioFileClip(audio_path)
                 duration = audio_clip.duration
             else:

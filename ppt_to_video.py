@@ -1,3 +1,7 @@
+# Define the folder paths at the top
+TEMP_IMAGES_FOLDER = 'temp_images'
+TEMP_AUDIO_FOLDER = 'temp_audio'
+
 import os
 import sys
 from pptx import Presentation
@@ -6,9 +10,22 @@ from moviepy.editor import *
 import comtypes.client
 import comtypes
 
+def create_temp_folders():
+    if not os.path.exists(TEMP_IMAGES_FOLDER):
+        os.makedirs(TEMP_IMAGES_FOLDER)
+    if not os.path.exists(TEMP_AUDIO_FOLDER):
+        os.makedirs(TEMP_AUDIO_FOLDER)
+
+def clean_temp_folders():
+    for folder in [TEMP_IMAGES_FOLDER, TEMP_AUDIO_FOLDER]:
+        for file in os.listdir(folder):
+            file_path = os.path.join(folder, file)
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
+
 def cleanup_temp_dirs():
     """Clean up temporary directories with error handling"""
-    for directory in ["temp_images", "temp_audio"]:
+    for directory in [TEMP_IMAGES_FOLDER, TEMP_AUDIO_FOLDER]:
         if os.path.exists(directory):
             try:
                 for file in os.listdir(directory):
@@ -27,10 +44,7 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
     try:
         clips = []
         # Create temp directories
-        if not os.path.exists("temp_images"):
-            os.mkdir("temp_images")
-        if not os.path.exists("temp_audio"):
-            os.mkdir("temp_audio")
+        create_temp_folders()
         if not os.path.exists(output_dir):
             os.mkdir(output_dir)
 
@@ -48,7 +62,7 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
         ppt = powerpoint.Presentations.Open(os.path.abspath(ppt_path))
 
         # Export slides as images
-        ppt.SaveAs(os.path.abspath("temp_images"), 17)  # 17 corresponds to PNG format
+        ppt.SaveAs(os.path.abspath(TEMP_IMAGES_FOLDER), 17)  # 17 corresponds to PNG format
         ppt.Close()
         powerpoint.Quit()
 
@@ -58,11 +72,11 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
         for idx, slide in enumerate(prs.slides):
             # Get slide notes
             notes = slide.notes_slide.notes_text_frame.text if slide.has_notes_slide else ""
-            slide_image_path = f"temp_images/slide{idx+1}.JPG"
+            slide_image_path = f"{TEMP_IMAGES_FOLDER}/slide{idx+1}.JPG"
 
             # Convert notes to speech
             if notes.strip():
-                audio_path = f"temp_audio/audio_{idx+1}.mp3"
+                audio_path = f"{TEMP_AUDIO_FOLDER}/audio_{idx+1}.mp3"
 
                 if provider == "openai":
                     # Generate speech using OpenAI

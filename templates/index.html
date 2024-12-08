@@ -15,7 +15,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <h1>PPT to Video Converter</h1>
+    <h1>Nakisa PPT to Video Converter</h1>
     <form action="/upload" method="post" enctype="multipart/form-data">
         <label for="file">Choose PPTX file:</label>
         <input type="file" id="file" name="file" accept=".pptx" required><br><br>
@@ -33,6 +33,19 @@
             <option value="fr">French</option>
         </select><br><br> -->
         
+        <div id="voiceSection">
+            <label for="voice">Choose OpenAI Voice:</label>
+            <a href="https://platform.openai.com/docs/guides/text-to-speech#voice-options" target="_blank">Voice Guide</a>
+            <select id="voice" name="voice">
+                <option value="alloy">Alloy</option>
+                <option value="echo">Echo</option>
+                <option value="fable">Fable</option>
+                <option value="onyx">Onyx</option>
+                <option value="nova">Nova</option>
+                <option value="shimmer">Shimmer</option>
+            </select><br><br>
+        </div>
+
         <div id="accentSection">
             <label for="accent">Choose accent:</label>
             <select id="accent" name="accent">
@@ -50,10 +63,18 @@
     function toggleAccentSection() {
         const provider = document.getElementById('tts_provider').value;
         const accentSection = document.getElementById('accentSection');
-        accentSection.style.display = provider === 'google' ? 'block' : 'none';
+        const voiceSection = document.getElementById('voiceSection');
+        
+        if (provider === 'google') {
+            accentSection.style.display = 'block';
+            voiceSection.style.display = 'none';
+        } else {
+            accentSection.style.display = 'none';
+            voiceSection.style.display = 'block';
+        }
     }
 
-    // Hide accent section initially if OpenAI is selected
+    // Initialize sections on page load
     window.onload = toggleAccentSection;
     </script>
 </body>

@@ -1,8 +1,13 @@
 from flask import Flask, request, render_template, send_file
 import os
+from dotenv import load_dotenv
+from openai import OpenAI
 from ppt_to_video import convert_ppt_to_video
 
+
 app = Flask(__name__)
+openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+
 
 @app.route('/')
 def index():
@@ -22,10 +27,11 @@ def upload():
         language = "en"
         provider = request.form['tts_provider']
         accent = request.form['accent']
+        openai_voice = request.form['voice']
         file_path = os.path.join('uploads', file.filename)
         file.save(file_path)
         output_video = 'output_video.mp4'
-        convert_ppt_to_video(ppt_path=file_path, output_dir=output_dir, output_video=output_video, provider=provider, language=language, accent=accent)
+        convert_ppt_to_video(openai_client=openai_client, ppt_path=file_path, output_dir=output_dir, output_video=output_video, provider=provider, language=language, accent=accent, openai_voice=openai_voice)
         return send_file(output_dir + "/" + output_video, as_attachment=True)
     return 'Invalid file type'
 

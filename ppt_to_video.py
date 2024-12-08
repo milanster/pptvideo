@@ -5,10 +5,6 @@ from gtts import gTTS
 from moviepy.editor import *
 import comtypes.client
 import comtypes
-from dotenv import load_dotenv
-from openai import OpenAI
-
-openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 def cleanup_temp_dirs():
     """Clean up temporary directories with error handling"""
@@ -27,7 +23,7 @@ def cleanup_temp_dirs():
             except Exception as e:
                 print(f"Warning: Could not remove directory {directory}: {e}")
 
-def convert_ppt_to_video(ppt_path, output_dir="output", output_video="output.mp4", provider="google", language='en', accent='com'):
+def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_video="output.mp4", provider="google", language='en', accent='com', openai_voice='alloy'):
     try:
         clips = []
         # Create temp directories
@@ -40,7 +36,7 @@ def convert_ppt_to_video(ppt_path, output_dir="output", output_video="output.mp4
 
         print("File path: ", ppt_path)
         if provider == "openai":
-            print("Using OpenAI")
+            print("Using OpenAI with voice:", openai_voice)
         else:
             print("Using Google")
 
@@ -72,7 +68,7 @@ def convert_ppt_to_video(ppt_path, output_dir="output", output_video="output.mp4
                     # Generate speech using OpenAI
                     response = openai_client.audio.speech.create(
                         model="tts-1",  # or "tts-1-hd" for higher quality
-                        voice="alloy",  # options: alloy, echo, fable, onyx, nova, shimmer
+                        voice=openai_voice,  # options: alloy, echo, fable, onyx, nova, shimmer
                         input=notes
                     )
                     

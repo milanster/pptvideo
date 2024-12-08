@@ -8,10 +8,7 @@ import comtypes
 from dotenv import load_dotenv
 from openai import OpenAI
 
-use_open_ai = False
-
-if use_open_ai:
-    client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
 def cleanup_temp_dirs():
     """Clean up temporary directories with error handling"""
@@ -30,7 +27,7 @@ def cleanup_temp_dirs():
             except Exception as e:
                 print(f"Warning: Could not remove directory {directory}: {e}")
 
-def convert_ppt_to_video(ppt_path, output_dir="output", output_video="output.mp4", language='en', accent='com'):
+def convert_ppt_to_video(ppt_path, output_dir="output", output_video="output.mp4", provider="google", language='en', accent='com'):
     try:
         clips = []
         # Create temp directories
@@ -42,6 +39,10 @@ def convert_ppt_to_video(ppt_path, output_dir="output", output_video="output.mp4
             os.mkdir(output_dir)
 
         print("File path: ", ppt_path)
+        if provider == "openai":
+            print("Using OpenAI")
+        else:
+            print("Using Google")
 
         # Initialize COM library
         comtypes.CoInitialize()
@@ -67,9 +68,9 @@ def convert_ppt_to_video(ppt_path, output_dir="output", output_video="output.mp4
             if notes.strip():
                 audio_path = f"temp_audio/audio_{idx+1}.mp3"
 
-                if use_open_ai:
+                if provider == "openai":
                     # Generate speech using OpenAI
-                    response = client.audio.speech.create(
+                    response = openai_client.audio.speech.create(
                         model="tts-1",  # or "tts-1-hd" for higher quality
                         voice="alloy",  # options: alloy, echo, fable, onyx, nova, shimmer
                         input=notes
@@ -77,7 +78,7 @@ def convert_ppt_to_video(ppt_path, output_dir="output", output_video="output.mp4
                     
                     # Save the audio file
                     response.stream_to_file(audio_path)
-                else:
+                else: # default / google
                     tts = gTTS(text=notes, lang=language, tld=accent)
                     tts.save(audio_path)
 

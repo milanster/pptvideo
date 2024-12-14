@@ -87,6 +87,8 @@ class ScreenCaptureApp:
         else:
             messagebox.showerror("Error", "Project already exists.")
 
+        self.selected_project.set(project_name)
+
         self.show_buttons(project_name)
 
     def project_selected(self, value):

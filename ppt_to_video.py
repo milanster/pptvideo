@@ -1,7 +1,3 @@
-# Define the folder paths at the top
-TEMP_IMAGES_FOLDER = 'temp_images'
-TEMP_AUDIO_FOLDER = 'temp_audio'
-
 import os
 import sys
 from pptx import Presentation
@@ -9,6 +5,10 @@ from gtts import gTTS
 from moviepy.editor import *
 import comtypes.client
 import comtypes
+
+# Define the folder paths at the top
+TEMP_IMAGES_FOLDER = 'temp_images'
+TEMP_AUDIO_FOLDER = 'temp_audio'
 
 def create_temp_folders():
     if not os.path.exists(TEMP_IMAGES_FOLDER):

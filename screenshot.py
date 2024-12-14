@@ -93,7 +93,7 @@ class ScreenCaptureApp:
 
     def browse_project(self):
         project_name = self.selected_project.get()
-        if project_name == "Select Existing Project":
+        if (project_name == "Select Existing Project"):
             messagebox.showerror("Error", "Please select an existing project.")
             return
 
@@ -234,6 +234,11 @@ class ScreenCaptureApp:
         text_frame = tk.Frame(frame)
         text_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
+        # Button frame with minimum width
+        button_frame = tk.Frame(frame, width=200)  # Set minimum width
+        button_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=5)
+        button_frame.pack_propagate(False)  # Prevent frame from shrinking
+
         scrollbar_y = tk.Scrollbar(text_frame, orient=tk.VERTICAL)
         scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
 
@@ -246,36 +251,49 @@ class ScreenCaptureApp:
         scrollbar_y.config(command=self.text_area.yview)
         scrollbar_x.config(command=self.text_area.xview)
 
-        # Button frame
-        button_frame = tk.Frame(frame)
-        button_frame.pack(side=tk.RIGHT, fill=tk.Y)
+        # Load microphone icon
+        mic_icon = Image.open("microphone.png")
+        mic_icon = mic_icon.resize((20, 20), Image.LANCZOS)
+        mic_photo = ImageTk.PhotoImage(mic_icon)
 
-        # Microphone button
-        mic_button = Button(button_frame, text="Speak", command=self.record_audio)
+        # Microphone button with icon
+        mic_button = Button(button_frame, image=mic_photo, command=self.record_audio, bg="lightblue", fg="black")
+        mic_button.image = mic_photo  # Keep a reference to avoid garbage collection
         mic_button.pack(anchor=tk.N)
 
-        # Save button
-        save_button = Button(button_frame, text="Save Notes", command=self.save_notes)
-        save_button.pack(anchor=tk.N)
+        # Frame for retake and delete buttons
+        retake_delete_frame = tk.Frame(button_frame)
+        retake_delete_frame.pack(anchor=tk.N, pady=10)
 
         # Retake screenshot button
-        retake_button = Button(button_frame, text="Retake Screenshot", command=self.retake_screenshot)
-        retake_button.pack(anchor=tk.N)
-
-        # Save and close button
-        save_and_close_button = Button(button_frame, text="Save and Close", command=self.save_and_close)
-        save_and_close_button.pack(anchor=tk.N)
+        retake_button = Button(retake_delete_frame, text="Retake Screenshot", command=self.retake_screenshot, bg="lightblue", fg="black")
+        retake_button.pack(side=tk.LEFT, padx=5)
 
         # Delete button
-        delete_button = Button(button_frame, text="Delete", command=self.delete_screenshot)
-        delete_button.pack(anchor=tk.N)
+        delete_button = Button(retake_delete_frame, text="Delete", command=self.delete_screenshot, bg="lightcoral", fg="black")
+        delete_button.pack(side=tk.LEFT, padx=5)
 
         # Previous and Next buttons
-        prev_button = Button(button_frame, text="Previous", command=self.show_previous_image)
-        prev_button.pack(anchor=tk.N)
+        nav_button_frame = tk.Frame(button_frame)
+        nav_button_frame.pack(anchor=tk.N, pady=10)
 
-        next_button = Button(button_frame, text="Next", command=self.show_next_image)
-        next_button.pack(anchor=tk.N)
+        prev_button = Button(nav_button_frame, text="Previous", command=self.show_previous_image, bg="lightgray", fg="black")
+        prev_button.pack(side=tk.LEFT, padx=5)
+
+        next_button = Button(nav_button_frame, text="Next", command=self.show_next_image, bg="lightgray", fg="black")
+        next_button.pack(side=tk.LEFT, padx=5)
+
+        # Frame for save buttons with top padding
+        save_button_frame = tk.Frame(button_frame)
+        save_button_frame.pack(anchor=tk.N, pady=10)
+
+        # Save button
+        save_button = Button(save_button_frame, text="Save", command=self.save_notes, bg="lightblue", fg="black")
+        save_button.pack(side=tk.LEFT, padx=5)
+
+        # Save and close button
+        save_and_close_button = Button(save_button_frame, text="Save and Close", command=self.save_and_close, bg="lightblue", fg="black")
+        save_and_close_button.pack(side=tk.LEFT, padx=5)
 
         # Load the initial text
         self.load_text()

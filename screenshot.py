@@ -206,17 +206,25 @@ class ScreenCaptureApp:
         scrollbar_y = tk.Scrollbar(image_frame, orient=tk.VERTICAL, command=image_canvas.yview)
         scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
 
-        scrollbar_x = tk.Scrollbar(image_frame, orient=tk.HORIZONTAL, command=image_canvas.xview)
+        scrollbar_x = tk.Scrollbar(image_frame, orient=tk.HORIZONTAL)
         scrollbar_x.pack(side=tk.BOTTOM, fill=tk.X)
 
         image_canvas.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
 
         # Display the screenshot
         self.img = Image.open(self.screenshot_filename)
+        # Store original image size before converting to PhotoImage
+        img_width = self.img.width
+        img_height = self.img.height
         self.img = ImageTk.PhotoImage(self.img)
         self.img_label = Label(image_canvas, image=self.img)
-        image_canvas.create_window(math.floor(self.IMAGE_CANVAS_WIDTH / 2), math.floor(self.IMAGE_CANVAS_HEIGHT / 2), anchor='center', window=self.img_label)  # Center the image
-        image_canvas.config(scrollregion=image_canvas.bbox(tk.ALL))
+        
+        # Calculate center coordinates based on both canvas and image dimensions
+        x = max(math.floor(self.IMAGE_CANVAS_WIDTH / 2), math.floor(img_width / 2))
+        y = max(math.floor(self.IMAGE_CANVAS_HEIGHT / 2), math.floor(img_height / 2))
+        
+        image_canvas.create_window(x, y, anchor='center', window=self.img_label)
+        image_canvas.config(scrollregion=(0, 0, img_width, img_height))
 
         # Frame for text area and buttons
         frame = tk.Frame(self.note_window)

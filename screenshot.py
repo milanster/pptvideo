@@ -3,9 +3,15 @@ from tkinter import Text, Toplevel, Label, Button, Entry, messagebox, OptionMenu
 from PIL import Image, ImageTk, ImageGrab
 import speech_recognition as sr
 import os
+import math
 
 class ScreenCaptureApp:
     CAPTURES_DIR = "captures"
+    SCREENSHOT_WINDOW_WIDTH = 1300
+    SCREENSHOT_WINDOW_HEIGHT = 900
+    IMAGE_CANVAS_WIDTH = 1300
+    IMAGE_CANVAS_HEIGHT = 700
+    
 
     def __init__(self, root):
         self.root = root
@@ -183,23 +189,54 @@ class ScreenCaptureApp:
         image_name = os.path.basename(self.screenshot_filename)
         self.note_window = Toplevel(self.root)
         self.note_window.title(f"{image_name}")
+        # self.note_window.geometry("1300x900")  # Set the window size to 1200x800 pixels
+        self.note_window.geometry(f"{self.SCREENSHOT_WINDOW_WIDTH}x{self.SCREENSHOT_WINDOW_HEIGHT}")
 
         # Hide the main window
         self.root.withdraw()
 
+        # Frame for image
+        image_frame = tk.Frame(self.note_window, height=self.IMAGE_CANVAS_HEIGHT)
+        image_frame.pack(fill=tk.X)
+
+        # Add scrollbars to the image frame
+        image_canvas = tk.Canvas(image_frame, width=self.IMAGE_CANVAS_WIDTH, height=self.IMAGE_CANVAS_HEIGHT)
+        image_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        scrollbar_y = tk.Scrollbar(image_frame, orient=tk.VERTICAL, command=image_canvas.yview)
+        scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
+
+        scrollbar_x = tk.Scrollbar(image_frame, orient=tk.HORIZONTAL, command=image_canvas.xview)
+        scrollbar_x.pack(side=tk.BOTTOM, fill=tk.X)
+
+        image_canvas.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+
         # Display the screenshot
         self.img = Image.open(self.screenshot_filename)
         self.img = ImageTk.PhotoImage(self.img)
-        self.img_label = Label(self.note_window, image=self.img)
-        self.img_label.pack()
+        self.img_label = Label(image_canvas, image=self.img)
+        image_canvas.create_window(math.floor(self.IMAGE_CANVAS_WIDTH / 2), math.floor(self.IMAGE_CANVAS_HEIGHT / 2), anchor='center', window=self.img_label)  # Center the image
+        image_canvas.config(scrollregion=image_canvas.bbox(tk.ALL))
 
         # Frame for text area and buttons
         frame = tk.Frame(self.note_window)
         frame.pack(fill=tk.BOTH, expand=True)
 
-        # Text area for notes
-        self.text_area = Text(frame, height=10)
+        # Text area for notes with scrollbars
+        text_frame = tk.Frame(frame)
+        text_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        scrollbar_y = tk.Scrollbar(text_frame, orient=tk.VERTICAL)
+        scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
+
+        scrollbar_x = tk.Scrollbar(text_frame, orient=tk.HORIZONTAL)
+        scrollbar_x.pack(side=tk.BOTTOM, fill=tk.X)
+
+        self.text_area = Text(text_frame, height=10, wrap=tk.NONE, yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
         self.text_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        scrollbar_y.config(command=self.text_area.yview)
+        scrollbar_x.config(command=self.text_area.xview)
 
         # Button frame
         button_frame = tk.Frame(frame)

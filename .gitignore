@@ -2,6 +2,7 @@
 output/
 temp_images/
 temp_audio/
+captures/
 
 # PowerPoint files
 *.pptx

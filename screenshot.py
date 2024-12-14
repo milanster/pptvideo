@@ -50,9 +50,16 @@ class ScreenCaptureApp:
         self.project_label.pack(pady=5)
         self.project_label.pack_forget()  # Hide the label initially
 
-        self.browse_button = tk.Button(root, text="Browse Project", command=self.browse_project)
-        self.browse_button.pack(pady=5)
+        self.button_frame = tk.Frame(root)
+        self.button_frame.pack(pady=5)
+
+        self.browse_button = tk.Button(self.button_frame, text="Browse", command=self.browse_project)
+        self.browse_button.pack(side=tk.LEFT, padx=5)
         self.browse_button.pack_forget()  # Hide the button initially
+
+        self.export_button = tk.Button(self.button_frame, text="Export", command=self.export_to_pptx)
+        self.export_button.pack(side=tk.LEFT, padx=5)
+        self.export_button.pack_forget()  # Hide initially
 
         self.button = tk.Button(root, text="Take Screenshot", command=self.start_screenshot)
         self.button.pack(pady=5)
@@ -94,6 +101,7 @@ class ScreenCaptureApp:
     def project_selected(self, value):
         self.project_dir = os.path.join(self.CAPTURES_DIR, value)
         self.show_buttons(value)
+        self.export_button.pack()  # Show export button
 
     def show_buttons(self, project_name):
         self.project_name_frame.pack_forget()
@@ -614,6 +622,71 @@ class ScreenCaptureApp:
         if hasattr(self, 'ai_undo_button'):
             self.ai_undo_button.pack_forget()
         self.pre_ai_text = None
+
+    def export_to_pptx(self):
+        from pptx import Presentation
+        from pptx.util import Inches
+        from tkinter import filedialog
+        
+        # Prompt for save location
+        filename = filedialog.asksaveasfilename(
+            defaultextension=".pptx",
+            filetypes=[("PowerPoint files", "*.pptx")],
+            title="Save PowerPoint As"
+        )
+        
+        if not filename:
+            return
+            
+        # Create presentation
+        prs = Presentation()
+        
+        # Get all screenshots in order
+        screenshots = sorted([f for f in os.listdir(self.project_dir) 
+                            if f.startswith("capture") and f.endswith(".png")],
+                           key=lambda x: int(x[7:-4]))
+                           
+        for screenshot in screenshots:
+            # Add slide
+            slide = prs.slides.add_slide(prs.slide_layouts[5])  # blank layout
+            
+            # Add image
+            img_path = os.path.join(self.project_dir, screenshot)
+            img = Image.open(img_path)
+            img_width, img_height = img.size
+            
+            # PowerPoint slide dimensions
+            slide_width = prs.slide_width
+            slide_height = prs.slide_height
+            
+            # Calculate scaling factor to fit image within slide
+            width_scale = slide_width / (img_width * Inches(1/96))
+            height_scale = slide_height / (img_height * Inches(1/96))
+            scale = min(width_scale, height_scale) * 0.9  # 90% of slide size
+            
+            # Calculate new dimensions
+            new_width = Inches(img_width/96) * scale
+            new_height = Inches(img_height/96) * scale
+            
+            # Calculate center position
+            left = (slide_width - new_width) / 2
+            top = (slide_height - new_height) / 2
+            
+            # Add image with calculated dimensions
+            slide.shapes.add_picture(img_path, left, top, width=new_width, height=new_height)
+            
+            # Add notes
+            notes_file = os.path.join(self.project_dir, f"{screenshot[:-4]}.txt")
+            if os.path.exists(notes_file):
+                with open(notes_file, 'r') as f:
+                    slide.notes_slide.notes_text_frame.text = f.read()
+        
+        # Save presentation
+        try:
+            prs.save(filename)
+            messagebox.showinfo("Success", "Project exported successfully!")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to export: {str(e)}")
 
 if __name__ == "__main__":
     root = tk.Tk()

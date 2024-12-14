@@ -11,11 +11,13 @@ load_dotenv()
 
 class ScreenCaptureApp:
     CAPTURES_DIR = "captures"
-    SCREENSHOT_WINDOW_WIDTH = 1300
+    SCREENSHOT_WINDOW_WIDTH = 1500
     SCREENSHOT_WINDOW_HEIGHT = 900
     IMAGE_CANVAS_WIDTH = 1300
     IMAGE_CANVAS_HEIGHT = 700
-    
+    BUTTONS_AREA_WIDTH = 300
+    DEFAULT_AI_PROMPT = "You are a presentation assistant that enhances text for slides used in recorded tutorial videos, ensuring the text is clear, professional, concise, and free from casual language such as 'thank you' or 'please', while maintaining a positive tone."
+    PROMPT_FILENAME = "ai_prompt.txt"
 
     def __init__(self, root):
         self.root = root
@@ -60,6 +62,10 @@ class ScreenCaptureApp:
         self.screenshot_counter = 0
 
         self.ai_client = OpenAI()
+        self.current_ai_prompt = self.DEFAULT_AI_PROMPT
+        self.project_dir = None
+        self.pre_ai_text = None
+        self.ai_undo_button = None
 
     def get_existing_projects(self):
         if not os.path.exists(self.CAPTURES_DIR):
@@ -104,6 +110,7 @@ class ScreenCaptureApp:
             return
 
         self.project_dir = os.path.join(self.CAPTURES_DIR, project_name)
+        self.load_prompt()
         # self.screenshot_counter = len([f for f in os.listdir(self.project_dir) if f.startswith("capture") and f.endswith(".png")])
         self.screenshot_counter = self.get_highest_image_number()
         if self.screenshot_counter == 0:
@@ -241,7 +248,7 @@ class ScreenCaptureApp:
         text_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # Button frame with minimum width
-        button_frame = tk.Frame(frame, width=200)  # Set minimum width
+        button_frame = tk.Frame(frame, width=self.BUTTONS_AREA_WIDTH)  # Set minimum width
         button_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=5)
         button_frame.pack_propagate(False)  # Prevent frame from shrinking
 
@@ -281,6 +288,17 @@ class ScreenCaptureApp:
         ai_enhance_button.image = ai_photo  # Keep a reference to avoid garbage collection
         ai_enhance_button.pack(side=tk.LEFT, padx=5)
 
+        # AI Undo button (initially hidden)
+        self.ai_undo_button = Button(mic_ai_frame, 
+                                   text="↩ Undo AI", 
+                                   command=self.undo_ai_enhance,
+                                   bg="#dc3545", 
+                                   fg="white")
+
+        # AI Settings button
+        ai_settings_button = Button(mic_ai_frame, text="⚙️", command=self.show_ai_settings, bg="lightblue", fg="black")
+        ai_settings_button.pack(side=tk.LEFT, padx=2)
+              
         # Frame for retake and delete buttons
         retake_delete_frame = tk.Frame(button_frame)
         retake_delete_frame.pack(anchor=tk.N, pady=10)
@@ -451,6 +469,7 @@ class ScreenCaptureApp:
         self.update_screenshot_display()
 
     def show_previous_image(self):
+        self.hide_undo_button()
         while self.screenshot_counter > 1:
             self.screenshot_counter -= 1
             self.screenshot_filename = os.path.join(self.project_dir, f"capture{self.screenshot_counter}.png")
@@ -461,6 +480,7 @@ class ScreenCaptureApp:
                 break
 
     def show_next_image(self):       
+        self.hide_undo_button()
         highest_image_number = self.get_highest_image_number()
         # print(f"Highest image number: {highest_image_number}")
         
@@ -499,20 +519,32 @@ class ScreenCaptureApp:
 
     def ai_enhance(self):
         try:
-            text_to_enhance = self.text_area.get("1.0", tk.END).strip()
-            if not text_to_enhance:
-                return
-            enhanced_text = self.call_chatgpt_api(text_to_enhance)
+            # Store current text for undo
+            self.pre_ai_text = self.text_area.get("1.0", tk.END).strip()
+            
+            # Perform AI enhancement
+            enhanced_text = self.call_chatgpt_api(self.pre_ai_text)
             self.text_area.delete("1.0", tk.END)
             self.text_area.insert(tk.END, enhanced_text)
+            
+            # Show undo button
+            self.ai_undo_button.pack(side=tk.LEFT, padx=2)
+            
         except Exception as e:
             messagebox.showerror("Error", f"Failed to enhance text: {str(e)}")
+
+    def undo_ai_enhance(self):
+        if self.pre_ai_text is not None:
+            self.text_area.delete("1.0", tk.END)
+            self.text_area.insert(tk.END, self.pre_ai_text)
+            self.pre_ai_text = None
+            self.ai_undo_button.pack_forget()
 
     def call_chatgpt_api(self, text):
         completion = self.ai_client.chat.completions.create(
             model= os.getenv("OPENAI_API_MODEL_ENHANCE"),
             messages=[
-                {"role": "system", "content": "You are a helpful assistant that enhances text to make it more clear and professional as part of a presentation."},
+                {"role": "system", "content": self.current_ai_prompt},
                 {"role": "user", "content": f"Please enhance this text:\n\n{text}"}
             ],
             # max_tokens=1000,
@@ -520,6 +552,66 @@ class ScreenCaptureApp:
         )
 
         return completion.choices[0].message.content.strip()
+
+    def show_ai_settings(self):
+        settings_window = Toplevel(self.root)
+        settings_window.title("AI Settings")
+        settings_window.geometry("400x300")
+        
+        # Prompt label
+        label = Label(settings_window, text="AI Enhancement Prompt:")
+        label.pack(pady=5)
+        
+        # Prompt text area
+        prompt_text = Text(settings_window, height=10, wrap=tk.WORD)
+        prompt_text.pack(padx=10, pady=5, fill=tk.BOTH, expand=True)
+        prompt_text.insert("1.0", self.current_ai_prompt)
+        
+        # Buttons frame
+        buttons_frame = tk.Frame(settings_window)
+        buttons_frame.pack(pady=10)
+        
+        def save_prompt():
+            new_prompt = prompt_text.get("1.0", tk.END).strip()
+            self.save_prompt(new_prompt)
+            settings_window.destroy()
+            
+        def restore_defaults():
+            prompt_text.delete("1.0", tk.END)
+            prompt_text.insert("1.0", self.DEFAULT_AI_PROMPT)
+            
+        # Save button
+        save_button = Button(buttons_frame, text="Save", command=save_prompt)
+        save_button.pack(side=tk.LEFT, padx=5)
+        
+        # Restore defaults button
+        restore_button = Button(buttons_frame, text="Restore Defaults", command=restore_defaults)
+        restore_button.pack(side=tk.LEFT, padx=5)
+        
+        # Cancel button
+        cancel_button = Button(buttons_frame, text="Cancel", command=settings_window.destroy)
+        cancel_button.pack(side=tk.LEFT, padx=5)
+
+    def save_prompt(self, prompt_text):
+        if self.project_dir:
+            prompt_file = os.path.join(self.project_dir, self.PROMPT_FILENAME)
+            with open(prompt_file, 'w') as f:
+                f.write(prompt_text)
+        self.current_ai_prompt = prompt_text
+            
+    def load_prompt(self):
+        if self.project_dir:
+            prompt_file = os.path.join(self.project_dir, self.PROMPT_FILENAME)
+            if os.path.exists(prompt_file):
+                with open(prompt_file, 'r') as f:
+                    self.current_ai_prompt = f.read().strip()
+            else:
+                self.current_ai_prompt = self.DEFAULT_AI_PROMPT
+
+    def hide_undo_button(self):
+        if hasattr(self, 'ai_undo_button'):
+            self.ai_undo_button.pack_forget()
+        self.pre_ai_text = None
 
 if __name__ == "__main__":
     root = tk.Tk()

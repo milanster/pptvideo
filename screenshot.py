@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import Text, Toplevel, Label, Button, Entry, messagebox, OptionMenu, StringVar
 from PIL import Image, ImageTk, ImageGrab
 import speech_recognition as sr
-import pyaudio
 import os
 
 class ScreenCaptureApp:
@@ -39,12 +38,16 @@ class ScreenCaptureApp:
         self.project_label.pack(pady=5)
         self.project_label.pack_forget()  # Hide the label initially
 
+        self.browse_button = tk.Button(root, text="Browse Project", command=self.browse_project)
+        self.browse_button.pack(pady=5)
+        self.browse_button.pack_forget()  # Hide the button initially
+
         self.button = tk.Button(root, text="Take Screenshot", command=self.start_screenshot)
         self.button.pack(pady=5)
         self.button.pack_forget()  # Hide the button initially
 
         # Initialize screenshot counter
-        self.screenshot_counter = 1
+        self.screenshot_counter = 0
 
     def get_existing_projects(self):
         if not os.path.exists(self.CAPTURES_DIR):
@@ -66,20 +69,37 @@ class ScreenCaptureApp:
         else:
             messagebox.showerror("Error", "Project already exists.")
 
-        self.show_take_screenshot_button(project_name)
+        self.show_buttons(project_name)
 
     def project_selected(self, value):
         self.project_dir = os.path.join(self.CAPTURES_DIR, value)
-        self.show_take_screenshot_button(value)
+        self.show_buttons(value)
 
-    def show_take_screenshot_button(self, project_name):
+    def show_buttons(self, project_name):
         self.project_name_frame.pack_forget()
         self.project_dropdown.pack_forget()
         self.label.pack_forget()
         self.project_label.config(text=f"Project: {project_name}")
         self.project_label.pack(pady=15, padx=15)
+        self.browse_button.pack(pady=5, padx=5)
         self.button.pack(pady=15, padx=15)
-        self.root.geometry("300x150")  # Set a specific width and height for the window
+        self.root.geometry("300x200")  # Set a specific width and height for the window
+
+    def browse_project(self):
+        project_name = self.selected_project.get()
+        if project_name == "Select Existing Project":
+            messagebox.showerror("Error", "Please select an existing project.")
+            return
+
+        self.project_dir = os.path.join(self.CAPTURES_DIR, project_name)
+        # self.screenshot_counter = len([f for f in os.listdir(self.project_dir) if f.startswith("capture") and f.endswith(".png")])
+        self.screenshot_counter = self.get_highest_image_number()
+        if self.screenshot_counter == 0:
+            messagebox.showerror("Error", "No screenshots found in the selected project.")
+            return
+
+        self.screenshot_filename = os.path.join(self.project_dir, f"capture{self.screenshot_counter}.png")
+        self.open_screenshot_window()
 
     def start_screenshot(self):
         project_name = self.project_name_entry.get().strip()
@@ -94,7 +114,8 @@ class ScreenCaptureApp:
             os.makedirs(self.project_dir)
 
         # Update screenshot counter based on existing screenshots
-        self.screenshot_counter = len([f for f in os.listdir(self.project_dir) if f.startswith("capture") and f.endswith(".png")]) + 1
+        # self.screenshot_counter = len([f for f in os.listdir(self.project_dir) if f.startswith("capture") and f.endswith(".png")]) + 1
+        self.screenshot_counter = self.get_highest_image_number() + 1
 
         self.root.withdraw()  # Hide the floating window
         self.screenshot_window = tk.Toplevel(self.root)
@@ -123,33 +144,48 @@ class ScreenCaptureApp:
         x2 = self.canvas.winfo_rootx() + event.x
         y2 = self.canvas.winfo_rooty() + event.y
 
+        if x1 == x2 or y1 == y2:
+            messagebox.showerror("Error", "Please select a region for the screenshot.")
+            self.screenshot_window.attributes("-alpha", 0.3)
+            return
+
         # Take the screenshot
         bbox = (min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2))
         screenshot = ImageGrab.grab(bbox)
         
         # Save the screenshot
-        self.screenshot_filename = os.path.join(self.project_dir, f"capture{self.screenshot_counter}.png")
-        screenshot.save(self.screenshot_filename)
-        print(f"Screenshot saved as {self.screenshot_filename}")
+        try:
+            self.screenshot_filename = os.path.join(self.project_dir, f"capture{self.screenshot_counter}.png")
+            screenshot.save(self.screenshot_filename)
+            print(f"Screenshot saved as {self.screenshot_filename}")
 
-        # Save an empty text file
-        notes_filename = os.path.join(self.project_dir, f"capture{self.screenshot_counter}.txt")
-        with open(notes_filename, "w") as file:
-            file.write("")
-        print(f"Empty notes file saved as {notes_filename}")
+            # Save an empty text file
+            notes_filename = os.path.join(self.project_dir, f"capture{self.screenshot_counter}.txt")
+            with open(notes_filename, "w") as file:
+                file.write("")
+            print(f"Empty notes file saved as {notes_filename}")
 
-        # Revert the window back to semi-transparent
-        self.screenshot_window.attributes("-alpha", 0.3)
+            # Revert the window back to semi-transparent
+            self.screenshot_window.attributes("-alpha", 0.3)
 
-        self.screenshot_window.destroy()
-        self.root.deiconify()  # Show the floating window again
+            self.screenshot_window.destroy()
+            
+            # Open the screenshot in a new window with a text area
+            self.open_screenshot_window()
+        except Exception as e:
+            print(f"Error saving screenshot: {e}")
+            messagebox.showerror("Error", "Error saving screenshot. Please try again.")
+            self.screenshot_window.destroy()
 
-        # Open the screenshot in a new window with a text area
-        self.open_screenshot_window()
+            self.root.deiconify()  # Show the floating window again
 
     def open_screenshot_window(self):
+        image_name = os.path.basename(self.screenshot_filename)
         self.note_window = Toplevel(self.root)
-        self.note_window.title("Screenshot and Notes")
+        self.note_window.title(f"{image_name}")
+
+        # Hide the main window
+        self.root.withdraw()
 
         # Display the screenshot
         self.img = Image.open(self.screenshot_filename)
@@ -185,6 +221,10 @@ class ScreenCaptureApp:
         save_and_close_button = Button(button_frame, text="Save and Close", command=self.save_and_close)
         save_and_close_button.pack(anchor=tk.N)
 
+        # Delete button
+        delete_button = Button(button_frame, text="Delete", command=self.delete_screenshot)
+        delete_button.pack(anchor=tk.N)
+
         # Previous and Next buttons
         prev_button = Button(button_frame, text="Previous", command=self.show_previous_image)
         prev_button.pack(anchor=tk.N)
@@ -195,15 +235,46 @@ class ScreenCaptureApp:
         # Load the initial text
         self.load_text()
 
+        # Protocol handler for closing the screenshot window
+        self.note_window.protocol("WM_DELETE_WINDOW", self.on_screenshot_window_close)
+
+    def delete_screenshot(self):
+        os.remove(self.screenshot_filename)
+        notes_filename = os.path.join(self.project_dir, f"capture{self.screenshot_counter}.txt")
+        if os.path.exists(notes_filename):
+            os.remove(notes_filename)
+        self.show_previous_image_or_main_window()
+
+    def on_screenshot_window_close(self):
+        # self.show_previous_image_or_main_window()
+        self.note_window.destroy()
+        self.root.deiconify()  # Show the main window again
+
+    def show_previous_image_or_main_window(self):
+        self.note_window.destroy()
+        if self.screenshot_counter > 1:
+            self.screenshot_counter -= 1
+            self.screenshot_filename = os.path.join(self.project_dir, f"capture{self.screenshot_counter}.png")
+            if os.path.exists(self.screenshot_filename):
+                self.open_screenshot_window()
+            else:
+                self.root.deiconify()  # Show the main window again
+        else:
+            self.root.deiconify()  # Show the main window again
+
     def save_and_close(self):
         self.save_notes()
-        self.note_window.destroy()
+        self.on_screenshot_window_close()
 
     def update_screenshot_display(self):
         self.img = Image.open(self.screenshot_filename)
         self.img = ImageTk.PhotoImage(self.img)
         self.img_label.config(image=self.img)
         self.img_label.image = self.img  # Keep a reference to avoid garbage collection
+
+    def update_window_title(self):
+        image_name = os.path.basename(self.screenshot_filename)
+        self.note_window.title(f"{image_name}")
 
     def record_audio(self):
         recognizer = sr.Recognizer()
@@ -259,44 +330,79 @@ class ScreenCaptureApp:
         x2 = self.canvas.winfo_rootx() + event.x
         y2 = self.canvas.winfo_rooty() + event.y
 
+        if x1 == x2 or y1 == y2:
+            messagebox.showerror("Error", "Please select a region for the screenshot.")
+            self.screenshot_window.attributes("-alpha", 0.3)
+            return
+
         # Take the screenshot
         bbox = (min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2))
         screenshot = ImageGrab.grab(bbox)
         
         # Save the screenshot (overwrite the previous one)
-        self.screenshot_filename = os.path.join(self.project_dir, f"capture{self.screenshot_counter}.png")
-        screenshot.save(self.screenshot_filename)
-        print(f"Screenshot saved as {self.screenshot_filename}")
+        try:
+            # breakpoint()
+            self.screenshot_filename = os.path.join(self.project_dir, f"capture{self.screenshot_counter}.png")
+            screenshot.save(self.screenshot_filename)
+            print(f"Screenshot saved as {self.screenshot_filename}")
 
-        # Revert the window back to semi-transparent
-        self.screenshot_window.attributes("-alpha", 0.3)
+            # Revert the window back to semi-transparent
+            self.screenshot_window.attributes("-alpha", 0.3)
 
-        self.screenshot_window.destroy()
-        self.root.deiconify()  # Show the floating window again
+            self.screenshot_window.destroy()
+            # self.root.deiconify()  # Show the floating window again
 
-        # Show the note window again with preserved text
-        self.note_window.deiconify()
-        self.text_area.delete("1.0", tk.END)
-        self.text_area.insert(tk.END, self.notes_text)
+            # Show the note window again with preserved text
+            self.note_window.deiconify()
+            self.text_area.delete("1.0", tk.END)
+            self.text_area.insert(tk.END, self.notes_text)
+
+            
+        except Exception as e:
+            print(f"Error saving screenshot: {e}")
+            messagebox.showerror("Error", "Error saving screenshot. Please try again.")
+            # self.screenshot_window.destroy()
+            # self.root.deiconify()  # Show the floating window again
 
         # Update the screenshot display
         self.update_screenshot_display()
 
     def show_previous_image(self):
-        if self.screenshot_counter > 1:
+        while self.screenshot_counter > 1:
             self.screenshot_counter -= 1
             self.screenshot_filename = os.path.join(self.project_dir, f"capture{self.screenshot_counter}.png")
-            self.update_screenshot_display()
-            self.load_text()
+            if os.path.exists(self.screenshot_filename):
+                self.update_screenshot_display()
+                self.load_text()
+                self.update_window_title()
+                break
 
-    def show_next_image(self):
+    def show_next_image(self):       
+        highest_image_number = self.get_highest_image_number()
+        # print(f"Highest image number: {highest_image_number}")
+        
         next_counter = self.screenshot_counter + 1
-        next_filename = os.path.join(self.project_dir, f"capture{next_counter}.png")
-        if os.path.exists(next_filename):
-            self.screenshot_counter = next_counter
-            self.screenshot_filename = next_filename
-            self.update_screenshot_display()
-            self.load_text()
+
+        while True:
+            # print(f"Next counter: {next_counter}")
+            next_filename = os.path.join(self.project_dir, f"capture{next_counter}.png")
+            if os.path.exists(next_filename):
+                self.screenshot_counter = next_counter
+                self.screenshot_filename = next_filename
+                self.update_screenshot_display()
+                self.load_text()
+                self.update_window_title()
+                break
+            elif next_counter > highest_image_number:
+                break
+            else:
+                next_counter += 1
+
+    def get_highest_image_number(self):
+        image_files = [f for f in os.listdir(self.project_dir) if f.startswith("capture") and f.endswith(".png")]
+        if not image_files:
+            return 0
+        return max(int(f[7:-4]) for f in image_files)
 
     def load_text(self):
         notes_filename = os.path.join(self.project_dir, f"capture{self.screenshot_counter}.txt")

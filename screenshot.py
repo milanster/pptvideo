@@ -4,6 +4,10 @@ from PIL import Image, ImageTk, ImageGrab
 import speech_recognition as sr
 import os
 import math
+from openai import OpenAI
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class ScreenCaptureApp:
     CAPTURES_DIR = "captures"
@@ -54,6 +58,8 @@ class ScreenCaptureApp:
 
         # Initialize screenshot counter
         self.screenshot_counter = 0
+
+        self.ai_client = OpenAI()
 
     def get_existing_projects(self):
         if not os.path.exists(self.CAPTURES_DIR):
@@ -245,11 +251,15 @@ class ScreenCaptureApp:
         scrollbar_x = tk.Scrollbar(text_frame, orient=tk.HORIZONTAL)
         scrollbar_x.pack(side=tk.BOTTOM, fill=tk.X)
 
-        self.text_area = Text(text_frame, height=10, wrap=tk.NONE, yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
+        self.text_area = Text(text_frame, height=10, wrap=tk.WORD, yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set)
         self.text_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         scrollbar_y.config(command=self.text_area.yview)
         scrollbar_x.config(command=self.text_area.xview)
+
+        # Frame for microphone and AI enhance buttons
+        mic_ai_frame = tk.Frame(button_frame)
+        mic_ai_frame.pack(anchor=tk.N, pady=10)
 
         # Load microphone icon
         mic_icon = Image.open("microphone.png")
@@ -257,9 +267,19 @@ class ScreenCaptureApp:
         mic_photo = ImageTk.PhotoImage(mic_icon)
 
         # Microphone button with icon
-        mic_button = Button(button_frame, image=mic_photo, command=self.record_audio, bg="lightblue", fg="black")
+        mic_button = Button(mic_ai_frame, image=mic_photo, command=self.record_audio, bg="lightblue", fg="black")
         mic_button.image = mic_photo  # Keep a reference to avoid garbage collection
-        mic_button.pack(anchor=tk.N)
+        mic_button.pack(side=tk.LEFT, padx=5)
+
+        # Load AI icon
+        ai_icon = Image.open("artificial-intelligence.png")
+        ai_icon = ai_icon.resize((20, 20), Image.LANCZOS)
+        ai_photo = ImageTk.PhotoImage(ai_icon)
+
+        # AI Enhance button with icon
+        ai_enhance_button = Button(mic_ai_frame, image=ai_photo, text=" AI Enhance", compound=tk.LEFT, command=self.ai_enhance, bg="lightblue", fg="black")
+        ai_enhance_button.image = ai_photo  # Keep a reference to avoid garbage collection
+        ai_enhance_button.pack(side=tk.LEFT, padx=5)
 
         # Frame for retake and delete buttons
         retake_delete_frame = tk.Frame(button_frame)
@@ -476,6 +496,30 @@ class ScreenCaptureApp:
             self.text_area.insert(tk.END, notes)
         else:
             self.text_area.delete("1.0", tk.END)
+
+    def ai_enhance(self):
+        try:
+            text_to_enhance = self.text_area.get("1.0", tk.END).strip()
+            if not text_to_enhance:
+                return
+            enhanced_text = self.call_chatgpt_api(text_to_enhance)
+            self.text_area.delete("1.0", tk.END)
+            self.text_area.insert(tk.END, enhanced_text)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to enhance text: {str(e)}")
+
+    def call_chatgpt_api(self, text):
+        completion = self.ai_client.chat.completions.create(
+            model= os.getenv("OPENAI_API_MODEL_ENHANCE"),
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that enhances text to make it more clear and professional as part of a presentation."},
+                {"role": "user", "content": f"Please enhance this text:\n\n{text}"}
+            ],
+            # max_tokens=1000,
+            # temperature=0.7
+        )
+
+        return completion.choices[0].message.content.strip()
 
 if __name__ == "__main__":
     root = tk.Tk()

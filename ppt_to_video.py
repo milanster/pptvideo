@@ -40,7 +40,7 @@ def cleanup_temp_dirs():
             except Exception as e:
                 print(f"Warning: Could not remove directory {directory}: {e}")
 
-def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_video="output.mp4", provider="google", language='en', accent='com', openai_voice='alloy'):
+def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_video="output.mp4", provider="google", language='en', accent='com', openai_voice='alloy', min_time_per_slide=6, pause_time_at_end=1):
     try:
         clips = []
         # Create temp directories
@@ -97,6 +97,14 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
             else:
                 audio_clip = None
                 duration = 5  # Default duration if no notes
+
+            # Ensure minimum time per slide
+            if min_time_per_slide > 0:
+                duration = max(duration, min_time_per_slide)
+
+            # Add pause at end if needed
+            if pause_time_at_end > 0:
+                duration += pause_time_at_end
 
             # Create video clip
             image_clip = ImageClip(slide_image_path).set_duration(duration)

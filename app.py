@@ -28,10 +28,24 @@ def upload():
         provider = request.form['tts_provider']
         accent = request.form['accent']
         openai_voice = request.form['voice']
+        min_time_per_slide = int(request.form['min_time_per_slide'])
+        pause_time_at_end = int(request.form['pause_time_at_end'])
+
         file_path = os.path.join('uploads', file.filename)
         file.save(file_path)
         output_video = 'output_video.mp4'
-        convert_ppt_to_video(openai_client=openai_client, ppt_path=file_path, output_dir=output_dir, output_video=output_video, provider=provider, language=language, accent=accent, openai_voice=openai_voice)
+        convert_ppt_to_video(
+            openai_client=openai_client,
+            ppt_path=file_path,
+            output_dir=output_dir,
+            output_video=output_video,
+            provider=provider,
+            language=language,
+            accent=accent,
+            openai_voice=openai_voice,
+            min_time_per_slide=min_time_per_slide,
+            pause_time_at_end=pause_time_at_end
+        )
         return send_file(output_dir + "/" + output_video, as_attachment=True)
     return 'Invalid file type'
 

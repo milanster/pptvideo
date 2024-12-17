@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 from pptx import Presentation
 from gtts import gTTS
 from moviepy.editor import *
@@ -40,6 +41,24 @@ def cleanup_temp_dirs():
             except Exception as e:
                 print(f"Warning: Could not remove directory {directory}: {e}")
 
+def get_min_time_from_notes(notes):
+    """
+    Searches the given notes for a string like {{min_time:5}} and
+    returns the minimum time (in seconds) if found. If not found, returns
+    None for the minimum time and the original notes for the second
+    argument. If found, the second argument will be the original notes
+    with the {{min_time:5}} string removed.
+    """
+    match = re.search(r'\{\{min_time:(\d+)\}\}', notes)
+    if match:
+        min_time = int(match.group(1))
+        cleaned_notes = re.sub(r'\{\{min_time:\d+\}\}', '', notes)
+        return min_time, cleaned_notes
+    return None, notes
+
+def remove_comments(notes=None):
+    return re.sub(r'\{\*.*?\*\}', '', notes, flags=re.DOTALL) if notes is not None else None # DOTAALL flag is used to match multilines
+
 def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_video="output.mp4", provider="google", language='en', accent='com', openai_voice='alloy', min_time_per_slide=6, pause_time_at_end=1):
     try:
         clips = []
@@ -73,9 +92,13 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
             # Get slide notes
             notes = slide.notes_slide.notes_text_frame.text if slide.has_notes_slide else ""
             slide_image_path = f"{TEMP_IMAGES_FOLDER}/slide{idx+1}.JPG"
+            duration = min_time_per_slide if min_time_per_slide is not None else 1
+
+            # get min time from slide if specified, also return cleaned notes {{min_time:X}} if specified
+            min_time_from_notes, notes = get_min_time_from_notes(remove_comments(notes)) 
 
             # Convert notes to speech
-            if notes.strip():
+            if notes is not None and notes.strip():
                 audio_path = f"{TEMP_AUDIO_FOLDER}/audio_{idx+1}.mp3"
 
                 if provider == "openai":
@@ -96,10 +119,12 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
                 duration = audio_clip.duration
             else:
                 audio_clip = None
-                duration = 5  # Default duration if no notes
+                duration = 1  # Default duration if no notes
 
             # Ensure minimum time per slide
-            if min_time_per_slide > 0:
+            if min_time_from_notes is not None:
+                duration = max(duration, min_time_from_notes)
+            elif min_time_per_slide > 0:
                 duration = max(duration, min_time_per_slide)
 
             # Add pause at end if needed

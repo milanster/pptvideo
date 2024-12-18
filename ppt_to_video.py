@@ -17,13 +17,6 @@ def create_temp_folders():
     if not os.path.exists(TEMP_AUDIO_FOLDER):
         os.makedirs(TEMP_AUDIO_FOLDER)
 
-def clean_temp_folders():
-    for folder in [TEMP_IMAGES_FOLDER, TEMP_AUDIO_FOLDER]:
-        for file in os.listdir(folder):
-            file_path = os.path.join(folder, file)
-            if os.path.isfile(file_path):
-                os.unlink(file_path)
-
 def cleanup_temp_dirs():
     """Clean up temporary directories with error handling"""
     for directory in [TEMP_IMAGES_FOLDER, TEMP_AUDIO_FOLDER]:

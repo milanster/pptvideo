@@ -6,6 +6,13 @@ from gtts import gTTS
 from moviepy.editor import *
 import comtypes.client
 import comtypes
+from pptx.enum.shapes import PP_MEDIA_TYPE
+# from moviepy.video.fx import speedx
+# from moviepy.video.fx.all import speedx
+
+import soundfile as sf
+import io
+
 
 # Define the folder paths at the top
 TEMP_IMAGES_FOLDER = 'temp_images'
@@ -13,12 +20,14 @@ TEMP_AUDIO_FOLDER = 'temp_audio'
 
 def create_temp_folders():
     if not os.path.exists(TEMP_IMAGES_FOLDER):
-        os.makedirs(TEMP_IMAGES_FOLDER)
+        os.mkdir(TEMP_IMAGES_FOLDER)
     if not os.path.exists(TEMP_AUDIO_FOLDER):
-        os.makedirs(TEMP_AUDIO_FOLDER)
+        os.mkdir(TEMP_AUDIO_FOLDER)
+
 
 def cleanup_temp_dirs():
     """Clean up temporary directories with error handling"""
+    print("Cleaning up temporary directories...")
     for directory in [TEMP_IMAGES_FOLDER, TEMP_AUDIO_FOLDER]:
         if os.path.exists(directory):
             try:
@@ -49,10 +58,58 @@ def get_min_time_from_notes(notes):
         return min_time, cleaned_notes
     return None, notes
 
+
+def get_slide_settings(notes):
+    """
+    Get the following settings from the slide notes (if available):
+    min_time, pause_time_at_end, ai_voice
+    Return the settings as a dictionary and the cleaned notes without the settings.
+    """
+
+    settings = {
+        "min_time": None,
+        "pause_time_at_end": None,
+        "ai_voice": None
+    }
+
+    # check for min_time in notes
+    match = re.search(r'\{\{min_time:(\d+)\}\}', notes)
+    if match:
+        min_time = int(match.group(1).strip())
+        notes = re.sub(r'\{\{min_time:\d+\}\}', '', notes)
+        settings["min_time"] = min_time
+
+    # check for pause_time_at_end in notes
+    match = re.search(r'\{\{pause_time_at_end:(\d+)\}\}', notes)
+    if match:
+        pause_time_at_end = int(match.group(1).strip())
+        notes = re.sub(r'\{\{pause_time_at_end:\d+\}\}', '', notes)
+        settings["pause_time_at_end"] = pause_time_at_end
+
+    # check for ai_voice in notes
+    match = re.search(r'\{\{ai_voice:(.*?)\}\}', notes)
+    if match:
+        ai_voice = match.group(1).strip()
+        notes = re.sub(r'\{\{ai_voice:(.*?)\}\}', '', notes)
+        settings["ai_voice"] = ai_voice
+
+    return settings, notes
+
 def remove_comments(notes=None):
     return re.sub(r'\{\*.*?\*\}', '', notes, flags=re.DOTALL) if notes is not None else None # DOTAALL flag is used to match multilines
 
-def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_video="output.mp4", provider="google", language='en', accent='com', openai_voice='alloy', min_time_per_slide=6, pause_time_at_end=1):
+def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_video="output.mp4", provider="google", language='en', accent='com', openai_voice='alloy', extra_settings=None):
+    # Default Settings
+    min_time_per_slide=6,
+    pause_time_at_end=1
+    fps=30
+    
+    if extra_settings is not None:
+        print("Extra settings: ", extra_settings)
+        min_time_per_slide = extra_settings.get("min_time_per_slide", 6)
+        pause_time_at_end = extra_settings.get("pause_time_at_end", 1)
+        fps = extra_settings.get("fps", 30)
+    
     try:
         clips = []
         # Create temp directories
@@ -70,11 +127,13 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
         comtypes.CoInitialize()
         # Convert PPT slides to images using COM interface (Windows only)
         powerpoint = comtypes.client.CreateObject("Powerpoint.Application")
+        pp_constants = comtypes.client.Constants(powerpoint)
         powerpoint.Visible = 1
         ppt = powerpoint.Presentations.Open(os.path.abspath(ppt_path))
 
         # Export slides as images
-        ppt.SaveAs(os.path.abspath(TEMP_IMAGES_FOLDER), 17)  # 17 corresponds to PNG format
+        # ppt.SaveAs(os.path.abspath(TEMP_IMAGES_FOLDER), pp_constants.ppSaveAsPNG)  # 17 corresponds to JPG format
+        ppt.SaveAs(os.path.abspath(TEMP_IMAGES_FOLDER), pp_constants.ppSaveAsPNG )  # 18 corresponds to PNG format
         ppt.Close()
         powerpoint.Quit()
 
@@ -84,11 +143,28 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
         for idx, slide in enumerate(prs.slides):
             # Get slide notes
             notes = slide.notes_slide.notes_text_frame.text if slide.has_notes_slide else ""
-            slide_image_path = f"{TEMP_IMAGES_FOLDER}/slide{idx+1}.JPG"
+            slide_image_path = f"{TEMP_IMAGES_FOLDER}/slide{idx+1}.PNG"
             duration = min_time_per_slide if min_time_per_slide is not None else 1
+            slide_ai_voice = openai_voice # by default, unless overwritten
 
             # get min time from slide if specified, also return cleaned notes {{min_time:X}} if specified
-            min_time_from_notes, notes = get_min_time_from_notes(remove_comments(notes)) 
+            
+            # min_time_from_notes, notes = get_min_time_from_notes(remove_comments(notes)) 
+            slide_settings, notes = get_slide_settings(remove_comments(notes))
+            min_time_from_notes = slide_settings.get("min_time", None)
+            pause_time_at_end_from_notes = slide_settings.get("pause_time_at_end", None)
+            ai_voice_from_notes = slide_settings.get("ai_voice", None)
+
+            # overwrite if needed
+            min_time_per_slide = min_time_from_notes if min_time_from_notes is not None else min_time_per_slide
+            pause_time_at_end = pause_time_at_end_from_notes if pause_time_at_end_from_notes is not None else pause_time_at_end
+            slide_ai_voice = ai_voice_from_notes if ai_voice_from_notes is not None else openai_voice
+
+            print("Slide", idx+1, "Settings :", slide_settings, "Notes:", notes)
+
+            if slide_ai_voice not in  ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]:
+                print("Invalid voice selected. Using default voice:", openai_voice)
+                slide_ai_voice = openai_voice
 
             # Convert notes to speech
             if notes is not None and notes.strip():
@@ -96,9 +172,10 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
 
                 if provider == "openai":
                     # Generate speech using OpenAI
+                    print("Generating speech using OpenAI with voice:", slide_ai_voice)
                     response = openai_client.audio.speech.create(
                         model="tts-1",  # or "tts-1-hd" for higher quality
-                        voice=openai_voice,  # options: alloy, echo, fable, onyx, nova, shimmer
+                        voice=slide_ai_voice,  # options: alloy, echo, fable, onyx, nova, shimmer
                         input=notes
                     )
                     
@@ -124,6 +201,16 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
             if pause_time_at_end > 0:
                 duration += pause_time_at_end
 
+             # Check for embedded videos
+            # video_clip = None
+            # for shape in slide.shapes:
+            #     breakpoint()
+            #     if shape.media_type and shape.media_type == PP_MEDIA_TYPE.MOVIE:
+            #         video_path = shape.media_format.media_file
+            #         video_clip = VideoFileClip(video_path)
+               
+
+
             # Create video clip
             image_clip = ImageClip(slide_image_path).set_duration(duration)
             if audio_clip:
@@ -133,8 +220,13 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
         # Concatenate all clips and write the final video
         if clips:
             final_clip = concatenate_videoclips(clips, method="compose")
-            final_clip.write_videofile(output_dir + "/" + output_video, fps=24)
+            # Speed up the final video by an ax amount
+            # final_clip = speedx(final_clip, factor=1.15)
+
+            final_clip.write_videofile(output_dir + "/" + output_video, fps=fps)
             final_clip.close()  # Explicitly close the clip
+    except Exception as e:
+        print(f"Error: {e}")
     finally:
         # Clean up resources
         for clip in clips:

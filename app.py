@@ -10,9 +10,21 @@ load_dotenv()
 app = Flask(__name__)
 openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
+def configure_ffmpeg_local(ffmpeg_path: str):
+    """
+    ffmpeg_path should be the full path to the ffmpeg binary,
+    e.g. "/absolute/path/to/my_project/bin/ffmpeg" or
+    "C:/path/to/my_project/bin/ffmpeg.exe".
+    """
+    # Make sure the directory containing ffmpeg is on PATH
+    ffmpeg_dir = os.path.dirname(os.path.abspath(ffmpeg_path))
+    os.environ["PATH"] = ffmpeg_dir + os.pathsep + os.environ["PATH"]
+
+
 
 @app.route('/')
 def index():
+    configure_ffmpeg_local("ffmpeg/bin/ffmpeg.exe") # add ffmpeg to our path. We need it to speed up audio files
     return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
@@ -32,6 +44,7 @@ def upload():
         openai_voice = request.form['voice']
         min_time_per_slide = int(request.form['min_time_per_slide'])
         pause_time_at_end = int(request.form['pause_time_at_end'])
+        speed_factor = float(request.form['speed_factor'])
         fps = int(request.form['fps'])
 
         file_path = os.path.join('uploads', file.filename)
@@ -41,6 +54,7 @@ def upload():
         extra_settings = {
             "min_time_per_slide": min_time_per_slide,
             "pause_time_at_end": pause_time_at_end,
+            "speed_factor": speed_factor,
             "fps": fps
         }
 

@@ -7,11 +7,15 @@ from moviepy.editor import *
 import comtypes.client
 import comtypes
 from pptx.enum.shapes import PP_MEDIA_TYPE
+import subprocess
 # from moviepy.video.fx import speedx
 # from moviepy.video.fx.all import speedx
 
-import soundfile as sf
+# import soundfile as sf
 import io
+
+# from pydub import AudioSegment
+# from pydub.playback import play
 
 
 # Define the folder paths at the top
@@ -98,16 +102,30 @@ def get_slide_settings(notes):
 def remove_comments(notes=None):
     return re.sub(r'\{\*.*?\*\}', '', notes, flags=re.DOTALL) if notes is not None else None # DOTAALL flag is used to match multilines
 
+
+def speed_up_audio_ffmpeg(input_path, output_path, speed_factor=1.25):
+    subprocess.run([
+        "ffmpeg", 
+        "-y", #overwrite file without asking
+        "-i", input_path, 
+        "-filter:a", f"atempo={speed_factor}",
+        "-vn",                # no video
+        output_path
+    ], check=True)
+
+
 def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_video="output.mp4", provider="google", language='en', accent='com', openai_voice='alloy', extra_settings=None):
     # Default Settings
-    min_time_per_slide=6,
-    pause_time_at_end=1
+    min_time_per_slide = 6,
+    pause_time_at_end = 1
+    speed_factor = 1
     fps=30
     
     if extra_settings is not None:
         print("Extra settings: ", extra_settings)
         min_time_per_slide = extra_settings.get("min_time_per_slide", 6)
         pause_time_at_end = extra_settings.get("pause_time_at_end", 1)
+        speed_factor = extra_settings.get("speed_factor", 1)
         fps = extra_settings.get("fps", 30)
     
     try:
@@ -174,9 +192,10 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
                     # Generate speech using OpenAI
                     print("Generating speech using OpenAI with voice:", slide_ai_voice)
                     response = openai_client.audio.speech.create(
-                        model="tts-1",  # or "tts-1-hd" for higher quality
+                        model="tts-1-hd",  # or "tts-1-hd" for higher quality
                         voice=slide_ai_voice,  # options: alloy, echo, fable, onyx, nova, shimmer
-                        input=notes
+                        input=notes,
+                        response_format="mp3"
                     )
                     
                     # Save the audio file
@@ -184,6 +203,12 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
                 else: # default / google
                     tts = gTTS(text=notes, lang=language, tld=accent)
                     tts.save(audio_path)
+
+                if speed_factor != 1:
+                    print("Speeding up audio by", speed_factor)
+                    output_path = f"{TEMP_AUDIO_FOLDER}/audio_spedup_{idx+1}.mp3"
+                    speed_up_audio_ffmpeg(input_path=audio_path, output_path=output_path, speed_factor=speed_factor)
+                    audio_path = output_path # overwrite audio path
 
                 audio_clip = AudioFileClip(audio_path)
                 duration = audio_clip.duration

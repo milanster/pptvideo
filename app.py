@@ -17,14 +17,16 @@ def configure_ffmpeg_local(ffmpeg_path: str):
     "C:/path/to/my_project/bin/ffmpeg.exe".
     """
     # Make sure the directory containing ffmpeg is on PATH
+    print("Adding ffmpeg to path")
     ffmpeg_dir = os.path.dirname(os.path.abspath(ffmpeg_path))
+    print(f"ffmpeg_dir: {ffmpeg_dir}")
+    print(f"PATH env to add:", ffmpeg_dir + os.pathsep + os.environ["PATH"])
     os.environ["PATH"] = ffmpeg_dir + os.pathsep + os.environ["PATH"]
 
 
 
 @app.route('/')
 def index():
-    configure_ffmpeg_local("ffmpeg/bin/ffmpeg.exe") # add ffmpeg to our path. We need it to speed up audio files
     return render_template('index.html')
 
 @app.route('/upload', methods=['POST'])
@@ -76,4 +78,10 @@ def upload():
 if __name__ == '__main__':
     if not os.path.exists('uploads'):
         os.mkdir('uploads')
+
+    ffmpeg_root_path = "ffmpeg"
+    if not os.path.exists(ffmpeg_root_path):
+        ffmpeg_root_path = "_internal/" + ffmpeg_root_path
+
+    configure_ffmpeg_local(f"{ffmpeg_root_path}/bin/ffmpeg.exe") # add ffmpeg to our path. We need it to speed up audio files
     app.run(debug=True)

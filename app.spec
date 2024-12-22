@@ -1,13 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-# Run: pyinstaller --hiddenimport=flask --hiddenimport=flask.render_template --hiddenimport=flast.send_file --hiddenimport=flask.Flask --hiddenimport=flask.request --hiddenimport=pptx --add-data ".env;." --add-data "templates;templates"  --add-data "static;static" app.py
-
 
 a = Analysis(
     ['app.py'],
     pathex=[],
     binaries=[],
-    datas=[('.env', '.'), ('templates', 'templates'), ('static', 'static')],
+    datas=[('.env', '.'), ('templates', 'templates'), ('static', 'static'), ('ffmpeg', 'ffmpeg')],
     hiddenimports=['flask', 'flask.render_template', 'flast.send_file', 'flask.Flask', 'flask.request', 'pptx'],
     hookspath=[],
     hooksconfig={},

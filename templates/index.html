@@ -73,6 +73,16 @@
             <input type="number" id="speed_factor" name="speed_factor" value="1" step="0.05" min="0.05" required>
         </div>
         
+        <span style="text-decoration: underline; cursor: pointer;" onclick="toggleHints()">Show Hints</span>
+        <div id="hintSection" style="display: none; width: 100%; border: 1px solid #ccc; padding: 10px; background-color: #f9f9f9;">
+            <pre style="white-space: pre-wrap; word-wrap: break-word;">
+                You can do the following in your ppt slides:<br>
+                {* This is a comment, it can be multi-line *}<br>
+                &#123;&#123;min_time:2&#125;&#125; // This overwrites min time per slide<br>
+                &#123;&#123;ai_voice: onyx&#125;&#125; // Overwrite AI voice per slide<br>
+            </pre>
+        </div>
+
         <input type="submit" value="Convert">
     </form>
 
@@ -93,6 +103,15 @@
 
     // Initialize sections on page load
     window.onload = toggleAccentSection;
+
+    function toggleHints() {
+        var hintSection = document.getElementById("hintSection");
+        if (hintSection.style.display === "none") {
+            hintSection.style.display = "block";
+        } else {
+            hintSection.style.display = "none";
+        }
+    }
     </script>
 </body>
 </html>

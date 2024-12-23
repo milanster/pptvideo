@@ -20,7 +20,7 @@ def configure_ffmpeg_local(ffmpeg_path: str):
     print("Adding ffmpeg to path")
     ffmpeg_dir = os.path.dirname(os.path.abspath(ffmpeg_path))
     print(f"ffmpeg_dir: {ffmpeg_dir}")
-    print(f"PATH env to add:", ffmpeg_dir + os.pathsep + os.environ["PATH"])
+    # print(f"PATH env to add:", ffmpeg_dir + os.pathsep + os.environ["PATH"])
     os.environ["PATH"] = ffmpeg_dir + os.pathsep + os.environ["PATH"]
 
 

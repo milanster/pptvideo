@@ -4,11 +4,12 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from ppt_to_video import convert_ppt_to_video
 
-
 load_dotenv()
 
 app = Flask(__name__)
 openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+
+output_video_filename = "video.mp4"
 
 def configure_ffmpeg_local(ffmpeg_path: str):
     """
@@ -22,7 +23,6 @@ def configure_ffmpeg_local(ffmpeg_path: str):
     print(f"ffmpeg_dir: {ffmpeg_dir}")
     # print(f"PATH env to add:", ffmpeg_dir + os.pathsep + os.environ["PATH"])
     os.environ["PATH"] = ffmpeg_dir + os.pathsep + os.environ["PATH"]
-
 
 
 @app.route('/')
@@ -51,7 +51,6 @@ def upload():
 
         file_path = os.path.join('uploads', file.filename)
         file.save(file_path)
-        output_video = 'output_video.mp4'
 
         extra_settings = {
             "min_time_per_slide": min_time_per_slide,
@@ -64,14 +63,14 @@ def upload():
             openai_client=openai_client,
             ppt_path=file_path,
             output_dir=output_dir,
-            output_video=output_video,
+            output_video=output_video_filename,
             provider=provider,
             language=language,
             accent=accent,
             openai_voice=openai_voice,
             extra_settings=extra_settings
         )
-        full_path = os.path.join(os.getcwd(), output_dir, output_video)
+        full_path = os.path.join(os.getcwd(), output_dir, output_video_filename)
         return send_file(full_path, as_attachment=True)
     return 'Invalid file type'
         

@@ -1,38 +1,33 @@
 import os
-import sys
 import re
 from pptx import Presentation
 from gtts import gTTS
 from moviepy.editor import *
 import comtypes.client
 import comtypes
-from pptx.enum.shapes import PP_MEDIA_TYPE
+from pptx.enum.shapes import PP_MEDIA_TYPE, MSO_SHAPE_TYPE
 import subprocess
-# from moviepy.video.fx import speedx
-# from moviepy.video.fx.all import speedx
-
-# import soundfile as sf
-import io
-
-# from pydub import AudioSegment
-# from pydub.playback import play
+import zipfile
 
 
 # Define the folder paths at the top
 TEMP_IMAGES_FOLDER = 'temp_images'
 TEMP_AUDIO_FOLDER = 'temp_audio'
+TEMP_VIDEOS_FOLDER = 'temp_videos'
 
 def create_temp_folders():
     if not os.path.exists(TEMP_IMAGES_FOLDER):
         os.mkdir(TEMP_IMAGES_FOLDER)
     if not os.path.exists(TEMP_AUDIO_FOLDER):
         os.mkdir(TEMP_AUDIO_FOLDER)
+    if not os.path.exists(TEMP_VIDEOS_FOLDER):
+        os.mkdir(TEMP_VIDEOS_FOLDER)
 
 
 def cleanup_temp_dirs():
     """Clean up temporary directories with error handling"""
     print("Cleaning up temporary directories...")
-    for directory in [TEMP_IMAGES_FOLDER, TEMP_AUDIO_FOLDER]:
+    for directory in [TEMP_IMAGES_FOLDER, TEMP_AUDIO_FOLDER, TEMP_VIDEOS_FOLDER]:
         if os.path.exists(directory):
             try:
                 for file in os.listdir(directory):
@@ -114,6 +109,32 @@ def speed_up_audio_ffmpeg(input_path, output_path, speed_factor=1.25):
     ], check=True)
 
 
+def extract_videos_from_slides(ppt_path):
+
+    videos = []
+    output_folder = TEMP_VIDEOS_FOLDER
+    # Ensure the output folder exists
+    os.makedirs(output_folder, exist_ok=True)
+    # Create videos sub folder
+    # slide_folder = os.path.join(output_folder, "videos")
+    # os.makedirs(slide_folder, exist_ok=True)
+
+    # Load the presentation
+    # presentation = Presentation(ppt_path)
+
+    # Open the .pptx file as a ZIP archive to access embedded media
+    with zipfile.ZipFile(ppt_path, 'r') as pptx_zip:
+        videos = [x for x in pptx_zip.namelist() if "mp4" in x]
+
+        for video in videos:
+            video_filename = os.path.basename(video)
+            video_path = os.path.join(output_folder, video_filename)
+            with open(video_path, "wb") as video_file:
+                video_file.write(pptx_zip.read(video))
+            print(f"Extracted video: {video_path}")
+
+    return videos
+
 def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_video="output.mp4", provider="google", language='en', accent='com', openai_voice='alloy', extra_settings=None):
     # Default Settings
     min_time_per_slide = 6,
@@ -154,6 +175,9 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
         ppt.SaveAs(os.path.abspath(TEMP_IMAGES_FOLDER), pp_constants.ppSaveAsPNG )  # 18 corresponds to PNG format
         ppt.Close()
         powerpoint.Quit()
+
+        # Extract videos from slides
+        videos = extract_videos_from_slides(ppt_path)
 
         # Load presentation to get slide notes
         prs = Presentation(ppt_path)
@@ -226,28 +250,55 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
             if pause_time_at_end > 0:
                 duration += pause_time_at_end
 
-             # Check for embedded videos
-            # video_clip = None
-            # for shape in slide.shapes:
-            #     breakpoint()
-            #     if shape.media_type and shape.media_type == PP_MEDIA_TYPE.MOVIE:
-            #         video_path = shape.media_format.media_file
-            #         video_clip = VideoFileClip(video_path)
-               
+            # Check for embedded videos
+            detected_video = None
+            for shape in slide.shapes:
+            # breakpoint()
+            # Media shapes may have .media or .src attributes
+                if shape.shape_type == MSO_SHAPE_TYPE.MEDIA and shape.media_type == PP_MEDIA_TYPE.MOVIE:
+                    # Get the relationship ID of the media
+                    # rId = shape._element.xpath('.//a:videoFile')[0].attrib
+                
+                    # iterate over the slide's relationships
+                    num_rels = 5
+                    for i in range(1, num_rels+1):
+                        if detected_video is not None:
+                            break
 
+                        curr_index = f"rId{i}"
+                        try:
+                            filename = os.path.basename(slide.part.rels[curr_index].target_partname)
+                            
+                            for video in videos:
+                                if filename in video:
+                                    print(f"Found video: {slide.part.rels[curr_index].target_partname} for slide: {idx + 1}")
+                                    detected_video = filename
+                                    break
 
-            # Create video clip
-            image_clip = ImageClip(slide_image_path).set_duration(duration)
-            if audio_clip:
-                image_clip = image_clip.set_audio(audio_clip)
-            clips.append(image_clip)
+                            # if any(filename in path for path in videos):
+                            #     print(f"Found video: {slide.part.rels[curr_index].target_partname} for slide: {slide_index}")
+                            #     return filename
+                                
+                        except Exception as e:
+                                pass
+                                # print(f"Error while scanning for videos for slide {slide_index}: {e}")
+
+            # right now we don't support video + audio from notes. so either or
+            if detected_video is not None:
+                video_clip = VideoFileClip(os.path.join(TEMP_VIDEOS_FOLDER, detected_video))
+                duration = max(duration, video_clip.duration)
+                clips.append(video_clip)
+
+            else:
+                # Create video clip from image
+                image_clip = ImageClip(slide_image_path).set_duration(duration)
+                if audio_clip:
+                    image_clip = image_clip.set_audio(audio_clip)
+                clips.append(image_clip)
 
         # Concatenate all clips and write the final video
         if clips:
             final_clip = concatenate_videoclips(clips, method="compose")
-            # Speed up the final video by an ax amount
-            # final_clip = speedx(final_clip, factor=1.15)
-
             final_clip.write_videofile(output_dir + "/" + output_video, fps=fps)
             final_clip.close()  # Explicitly close the clip
     except Exception as e:

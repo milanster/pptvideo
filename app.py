@@ -74,7 +74,7 @@ def upload():
         full_path = os.path.join(os.getcwd(), output_dir, output_video)
         return send_file(full_path, as_attachment=True)
     return 'Invalid file type'
-
+        
 if __name__ == '__main__':
     if not os.path.exists('uploads'):
         os.mkdir('uploads')

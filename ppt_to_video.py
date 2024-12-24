@@ -42,22 +42,6 @@ def cleanup_temp_dirs():
             except Exception as e:
                 print(f"Warning: Could not remove directory {directory}: {e}")
 
-def get_min_time_from_notes(notes):
-    """
-    Searches the given notes for a string like {{min_time:5}} and
-    returns the minimum time (in seconds) if found. If not found, returns
-    None for the minimum time and the original notes for the second
-    argument. If found, the second argument will be the original notes
-    with the {{min_time:5}} string removed.
-    """
-    match = re.search(r'\{\{min_time:(\d+)\}\}', notes)
-    if match:
-        min_time = int(match.group(1))
-        cleaned_notes = re.sub(r'\{\{min_time:\d+\}\}', '', notes)
-        return min_time, cleaned_notes
-    return None, notes
-
-
 def get_slide_settings(notes):
     """
     Get the following settings from the slide notes (if available):
@@ -132,12 +116,6 @@ def extract_videos_from_slides(ppt_path):
     output_folder = TEMP_VIDEOS_FOLDER
     # Ensure the output folder exists
     os.makedirs(output_folder, exist_ok=True)
-    # Create videos sub folder
-    # slide_folder = os.path.join(output_folder, "videos")
-    # os.makedirs(slide_folder, exist_ok=True)
-
-    # Load the presentation
-    # presentation = Presentation(ppt_path)
 
     # Open the .pptx file as a ZIP archive to access embedded media
     with zipfile.ZipFile(ppt_path, 'r') as pptx_zip:
@@ -206,9 +184,7 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
             duration = min_time_per_slide if min_time_per_slide is not None else 1
             slide_ai_voice = openai_voice # by default, unless overwritten
 
-            # get min time from slide if specified, also return cleaned notes {{min_time:X}} if specified
-            
-            # min_time_from_notes, notes = get_min_time_from_notes(remove_comments(notes)) 
+            # get cleaned notes, and all settings from slide
             slide_settings, notes = get_slide_settings(remove_comments(notes))
             min_time_from_notes = slide_settings.get("min_time", None)
             pause_time_at_end_from_notes = slide_settings.get("pause_time_at_end", None)
@@ -279,22 +255,14 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
                     # iterate over the slide's relationships
                     num_rels = 5
                     for i in range(1, num_rels+1):
-                        if detected_video is not None:
-                            break
-
                         curr_index = f"rId{i}"
                         try:
                             filename = os.path.basename(slide.part.rels[curr_index].target_partname)
                             
-                            for video in videos:
-                                if filename in video:
-                                    print(f"Found video: {slide.part.rels[curr_index].target_partname} for slide: {idx + 1}")
-                                    detected_video = filename
-                                    break
-
-                            # if any(filename in path for path in videos):
-                            #     print(f"Found video: {slide.part.rels[curr_index].target_partname} for slide: {slide_index}")
-                            #     return filename
+                            if any(filename in path for path in videos):
+                                print(f"Found video: {slide.part.rels[curr_index].target_partname} for slide: {idx + 1}")
+                                detected_video = filename
+                                break
                                 
                         except Exception as e:
                                 pass
@@ -308,12 +276,6 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
                 if speed_factor > 1:
                     clip.duration = clip.duration * speed_factor
 
-                # if clip.audio is not None:
-                #     # Standardize sample rate and channels
-                #     clip = clip.set_audio(clip.audio.set_fps(fps).set_channels(2))
-                # clip = clip.set_fps(fps)
-                # clips.append(clip)
-
             else:
                 # Create video clip from image
                 clip = ImageClip(slide_image_path).set_duration(duration)
@@ -322,13 +284,9 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
 
                 if speed_factor > 1:
                     clip.duration = clip.duration * speed_factor
-                # clips.append(clip)
             
             if clip.audio is not None:
-                # Standardize sample rate and channels
-                # clip = clip.set_audio(clip.audio.set_fps(fps).set_channels(2))
                 clip = clip.set_audio(clip.audio.set_fps(44100))
-            # clip = clip.set_fps(fps)
             clips.append(clip)
 
         # Concatenate all clips and write the final video

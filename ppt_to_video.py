@@ -99,16 +99,33 @@ def remove_comments(notes=None):
 
 
 def speed_up_audio_ffmpeg(input_path, output_path, speed_factor=1.25):
+    """
+    NOT recommended to speed up audio files individually before concatenating them. 
+    First concatenate the audio/video files and then speed up the final file. Otherwise you might hear some glitches.
+    """
     subprocess.run([
         "ffmpeg", 
         "-y", #overwrite file without asking
         "-i", input_path, 
         "-filter:a", f"atempo={speed_factor}",
+        "-b:a", "320k",
+        "-q:a", "1",
         "-vn",                # no video
         output_path
     ], check=True)
 
 
+def speed_up_video_ffmpeg(input_path, output_path, speed_factor=1.25):
+    command = [
+        "ffmpeg",
+        "-y", #overwrite file without asking
+        "-i", input_path,
+        "-filter_complex", f"[0:v]setpts=0.8*PTS[v];[0:a]atempo={speed_factor}[a]",
+        "-map", "[v]",
+        "-map", "[a]",
+        output_path
+    ]
+    subprocess.run(command, check=True)
 def extract_videos_from_slides(ppt_path):
 
     videos = []
@@ -228,11 +245,11 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
                     tts = gTTS(text=notes, lang=language, tld=accent)
                     tts.save(audio_path)
 
-                if speed_factor != 1:
-                    print("Speeding up audio by", speed_factor)
-                    output_path = f"{TEMP_AUDIO_FOLDER}/audio_spedup_{idx+1}.mp3"
-                    speed_up_audio_ffmpeg(input_path=audio_path, output_path=output_path, speed_factor=speed_factor)
-                    audio_path = output_path # overwrite audio path
+                # if speed_factor != 1:
+                #     print("Speeding up audio by", speed_factor)
+                #     output_path = f"{TEMP_AUDIO_FOLDER}/audio_spedup_{idx+1}.mp3"
+                #     speed_up_audio_ffmpeg(input_path=audio_path, output_path=output_path, speed_factor=speed_factor)
+                #     audio_path = output_path # overwrite audio path
 
                 audio_clip = AudioFileClip(audio_path)
                 duration = audio_clip.duration
@@ -285,29 +302,67 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
 
             # right now we don't support video + audio from notes. so either or
             if detected_video is not None:
-                video_clip = VideoFileClip(os.path.join(TEMP_VIDEOS_FOLDER, detected_video))
-                duration = max(duration, video_clip.duration)
-                clips.append(video_clip)
+                clip = VideoFileClip(os.path.join(TEMP_VIDEOS_FOLDER, detected_video))
+                clip.duration = max(duration, clip.duration)
+
+                if speed_factor > 1:
+                    clip.duration = clip.duration * speed_factor
+
+                # if clip.audio is not None:
+                #     # Standardize sample rate and channels
+                #     clip = clip.set_audio(clip.audio.set_fps(fps).set_channels(2))
+                # clip = clip.set_fps(fps)
+                # clips.append(clip)
 
             else:
                 # Create video clip from image
-                image_clip = ImageClip(slide_image_path).set_duration(duration)
+                clip = ImageClip(slide_image_path).set_duration(duration)
                 if audio_clip:
-                    image_clip = image_clip.set_audio(audio_clip)
-                clips.append(image_clip)
+                    clip = clip.set_audio(audio_clip)
+
+                if speed_factor > 1:
+                    clip.duration = clip.duration * speed_factor
+                # clips.append(clip)
+            
+            if clip.audio is not None:
+                # Standardize sample rate and channels
+                # clip = clip.set_audio(clip.audio.set_fps(fps).set_channels(2))
+                clip = clip.set_audio(clip.audio.set_fps(44100))
+            # clip = clip.set_fps(fps)
+            clips.append(clip)
 
         # Concatenate all clips and write the final video
         if clips:
+            # introduce a little crossfade:
+            crossfade_duration = 0.3
+            for i in range(1, len(clips)):
+                clips[i] = clips[i].crossfadein(crossfade_duration)
+
             final_clip = concatenate_videoclips(clips, method="compose")
-            final_clip.write_videofile(output_dir + "/" + output_video, fps=fps)
-            final_clip.close()  # Explicitly close the clip
+            final_clip = final_clip.set_fps(fps)
+            if hasattr(final_clip, 'audio') and final_clip.audio is not None:
+                final_clip.audio = final_clip.audio.set_fps(44100)  # Standard audio sample rate
+            
+            temp_name = "_temp.mp4"
+            final_clip.write_videofile(output_dir + "/" + temp_name, fps=fps, audio_codec="aac", audio_bitrate='192k', codec="libx264", preset="ultrafast", threads=4)
+            final_clip.close()
+
+            # speed up video
+            if speed_factor != 1:
+                print("Speeding up video by", speed_factor)
+                speed_up_video_ffmpeg(input_path=output_dir + "/" + temp_name, output_path=output_dir + "/" + output_video, speed_factor=speed_factor)
+                # delete the temp file
+                os.remove(output_dir + "/" + temp_name)
+            else:
+                os.rename(output_dir + "/" + temp_name, output_dir + "/" + output_video)
+                
     except Exception as e:
         print(f"Error: {e}")
     finally:
         # Clean up resources
         for clip in clips:
             clip.close()
-        cleanup_temp_dirs()
+        cleanup_temp_dirs()   
 
 if __name__ == "__main__":
     # if len(sys.argv) > 1:

@@ -48,6 +48,7 @@ def upload():
         pause_time_at_end = int(request.form['pause_time_at_end'])
         speed_factor = float(request.form['speed_factor'])
         fps = int(request.form['fps'])
+        slide_numbers = request.form['slide_numbers']
 
         file_path = os.path.join('uploads', file.filename)
         file.save(file_path)
@@ -56,7 +57,8 @@ def upload():
             "min_time_per_slide": min_time_per_slide,
             "pause_time_at_end": pause_time_at_end,
             "speed_factor": speed_factor,
-            "fps": fps
+            "fps": fps,
+            "slide_numbers": slide_numbers
         }
 
         convert_ppt_to_video(

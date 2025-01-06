@@ -136,6 +136,7 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
     pause_time_at_end = 1
     speed_factor = 1
     fps=30
+    slides_numbers_to_process = []
     
     if extra_settings is not None:
         print("Extra settings: ", extra_settings)
@@ -143,7 +144,18 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
         pause_time_at_end = extra_settings.get("pause_time_at_end", 1)
         speed_factor = extra_settings.get("speed_factor", 1)
         fps = extra_settings.get("fps", 30)
+        slide_numbers = extra_settings.get("slide_numbers", None)
+
+        if slide_numbers:
+            # get slide numbers to process. Support for example 1,2,3 for slides 1,2,3 and also 1-5 for all slides from 1 to 5 inclusive
+            for part in slide_numbers.split(","):
+                if "-" in part:
+                    start, end = part.split("-")
+                    slides_numbers_to_process.extend(range(int(start), int(end) + 1))
+                else:
+                    slides_numbers_to_process.append(int(part))
     
+        print("Slides to process:", slides_numbers_to_process)
     try:
         clips = []
         # Create temp directories
@@ -178,6 +190,10 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
         prs = Presentation(ppt_path)
 
         for idx, slide in enumerate(prs.slides):
+            # Skip slides not in the list
+            if idx+1 not in slides_numbers_to_process and len(slides_numbers_to_process) > 0:
+                continue
+
             # Get slide notes
             notes = slide.notes_slide.notes_text_frame.text if slide.has_notes_slide else ""
             slide_image_path = f"{TEMP_IMAGES_FOLDER}/slide{idx+1}.PNG"

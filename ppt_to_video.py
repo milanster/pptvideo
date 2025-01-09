@@ -100,16 +100,33 @@ def speed_up_audio_ffmpeg(input_path, output_path, speed_factor=1.25):
 
 
 def speed_up_video_ffmpeg(input_path, output_path, speed_factor=1.25):
+    # command = [
+    #     "ffmpeg",
+    #     "-y", #overwrite file without asking
+    #     "-i", input_path,
+    #     "-filter_complex", f"[0:v]setpts=0.8*PTS[v];[0:a]atempo={speed_factor}[a]",
+    #     "-map", "[v]",
+    #     "-map", "[a]",
+    #     output_path
+    # ]
+    # FFmpeg command to speed up video and audio
     command = [
         "ffmpeg",
-        "-y", #overwrite file without asking
         "-i", input_path,
-        "-filter_complex", f"[0:v]setpts=0.8*PTS[v];[0:a]atempo={speed_factor}[a]",
-        "-map", "[v]",
-        "-map", "[a]",
+        "-filter:v", f"setpts=PTS/{speed_factor}",
+        "-filter:a", f"atempo={speed_factor}",
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "23",
         output_path
     ]
-    subprocess.run(command, check=True)
+
+    try:
+        subprocess.run(command, check=True)
+        print(f"Video successfully sped up and saved to {output_path}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error during FFmpeg execution: {e}")
+
 def extract_videos_from_slides(ppt_path):
 
     videos = []
@@ -308,9 +325,9 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
         # Concatenate all clips and write the final video
         if clips:
             # introduce a little crossfade:
-            crossfade_duration = 0.3
-            for i in range(1, len(clips)):
-                clips[i] = clips[i].crossfadein(crossfade_duration)
+            # crossfade_duration = 0.3
+            # for i in range(1, len(clips)):
+            #     clips[i] = clips[i].crossfadein(crossfade_duration)
 
             final_clip = concatenate_videoclips(clips, method="compose")
             final_clip = final_clip.set_fps(fps)
@@ -322,6 +339,10 @@ def convert_ppt_to_video(openai_client, ppt_path, output_dir="output", output_vi
             final_clip.close()
 
             # speed up video
+            # remove existing file first
+            if os.path.exists(output_dir + "/" + output_video):
+                os.remove(output_dir + "/" + output_video)
+
             if speed_factor != 1:
                 print("Speeding up video by", speed_factor)
                 speed_up_video_ffmpeg(input_path=output_dir + "/" + temp_name, output_path=output_dir + "/" + output_video, speed_factor=speed_factor)

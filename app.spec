@@ -1,3 +1,5 @@
+# pyinstaller --hiddenimport=flask --hiddenimport=flask.render_template --hiddenimport=flast.send_file --hiddenimport=flask.Flask --hiddenimport=flask.request --hiddenimport=pptx --add-data ".env;." --add-data "templates;templates"  --add-data "static;static" --add-data "ffmpeg;ffmpeg" app.py
+
 # -*- mode: python ; coding: utf-8 -*-
 
 
